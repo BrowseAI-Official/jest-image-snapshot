@@ -12,21 +12,21 @@
  * the License.
  */
 
-const childProcess = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const mkdirp = require('mkdirp');
-const pixelmatch = require('pixelmatch');
-const { PNG } = require('pngjs');
-const rimraf = require('rimraf');
-const { createHash } = require('crypto');
-const glur = require('glur');
-const ImageComposer = require('./image-composer');
+const childProcess = require("child_process");
+const fs = require("fs");
+const path = require("path");
+const mkdirp = require("mkdirp");
+const pixelmatch = require("pixelmatch");
+const { PNG } = require("pngjs");
+const rimraf = require("rimraf");
+const { createHash } = require("crypto");
+const glur = require("glur");
+const ImageComposer = require("./image-composer");
 
 /**
  * Helper function to create reusable image resizer
  */
-const createImageResizer = (width, height) => (source) => {
+const createImageResizer = (width, height) => source => {
   const resized = new PNG({ width, height, fill: true });
   PNG.bitblt(source, resized, 0, 0, source.width, source.height, 0, 0);
   return resized;
@@ -36,12 +36,12 @@ const createImageResizer = (width, height) => (source) => {
  * Fills diff area with black transparent color for meaningful diff
  */
 /* eslint-disable no-plusplus, no-param-reassign, no-bitwise */
-const fillSizeDifference = (width, height) => (image) => {
+const fillSizeDifference = (width, height) => image => {
   const inArea = (x, y) => y > height || x > width;
   for (let y = 0; y < image.height; y++) {
     for (let x = 0; x < image.width; x++) {
       if (inArea(x, y)) {
-        const idx = ((image.width * y) + x) << 2;
+        const idx = (image.width * y + x) << 2;
         image.data[idx] = 0;
         image.data[idx + 1] = 0;
         image.data[idx + 2] = 0;
@@ -74,15 +74,14 @@ const alignImagesToSameSize = (firstImage, secondImage) => {
   // Fill resized area with black transparent pixels
   return [
     fillSizeDifference(firstImageWidth, firstImageHeight)(resizedFirst),
-    fillSizeDifference(secondImageWidth, secondImageHeight)(resizedSecond),
+    fillSizeDifference(secondImageWidth, secondImageHeight)(resizedSecond)
   ];
 };
 
 const isFailure = ({ pass, updateSnapshot }) => !pass && !updateSnapshot;
 
-const shouldUpdate = ({ pass, updateSnapshot, updatePassedSnapshot }) => (
-  (!pass && updateSnapshot) || (pass && updatePassedSnapshot)
-);
+const shouldUpdate = ({ pass, updateSnapshot, updatePassedSnapshot }) =>
+  (!pass && updateSnapshot) || (pass && updatePassedSnapshot);
 
 function diffImageToSnapshot(options) {
   /* eslint complexity: ["error", 12] */
@@ -98,10 +97,14 @@ function diffImageToSnapshot(options) {
     failureThreshold,
     failureThresholdType,
     blur,
+    allowSizeMismatch
   } = options;
 
   let result = {};
-  const baselineSnapshotPath = path.join(snapshotsDir, `${snapshotIdentifier}-snap.png`);
+  const baselineSnapshotPath = path.join(
+    snapshotsDir,
+    `${snapshotIdentifier}-snap.png`
+  );
   if (!fs.existsSync(baselineSnapshotPath)) {
     mkdirp.sync(snapshotsDir);
     fs.writeFileSync(baselineSnapshotPath, receivedImageBuffer);
@@ -111,22 +114,23 @@ function diffImageToSnapshot(options) {
     rimraf.sync(diffOutputPath);
 
     const defaultDiffConfig = {
-      threshold: 0.01,
+      threshold: 0.01
     };
 
     const diffConfig = Object.assign({}, defaultDiffConfig, customDiffConfig);
 
     const rawReceivedImage = PNG.sync.read(receivedImageBuffer);
-    const rawBaselineImage = PNG.sync.read(fs.readFileSync(baselineSnapshotPath));
-    const hasSizeMismatch = (
-      rawReceivedImage.height !== rawBaselineImage.height ||
-      rawReceivedImage.width !== rawBaselineImage.width
+    const rawBaselineImage = PNG.sync.read(
+      fs.readFileSync(baselineSnapshotPath)
     );
+    const hasSizeMismatch =
+      rawReceivedImage.height !== rawBaselineImage.height ||
+      rawReceivedImage.width !== rawBaselineImage.width;
     const imageDimensions = {
       receivedHeight: rawReceivedImage.height,
       receivedWidth: rawReceivedImage.width,
       baselineHeight: rawBaselineImage.height,
-      baselineWidth: rawBaselineImage.width,
+      baselineWidth: rawBaselineImage.width
     };
     // Align images in size if different
     const [receivedImage, baselineImage] = hasSizeMismatch
@@ -135,7 +139,7 @@ function diffImageToSnapshot(options) {
     const imageWidth = receivedImage.width;
     const imageHeight = receivedImage.height;
 
-    if (typeof blur === 'number' && blur > 0) {
+    if (typeof blur === "number" && blur > 0) {
       glur(receivedImage.data, imageWidth, imageHeight, blur);
       glur(baselineImage.data, imageWidth, imageHeight, blur);
     }
@@ -147,8 +151,12 @@ function diffImageToSnapshot(options) {
     let diffRatio = 0;
     let diffPixelCount = 0;
 
-    const receivedImageDigest = createHash('sha1').update(receivedImage.data).digest('base64');
-    const baselineImageDigest = createHash('sha1').update(baselineImage.data).digest('base64');
+    const receivedImageDigest = createHash("sha1")
+      .update(receivedImage.data)
+      .digest("base64");
+    const baselineImageDigest = createHash("sha1")
+      .update(baselineImage.data)
+      .digest("base64");
 
     pass = receivedImageDigest === baselineImageDigest;
 
@@ -166,21 +174,23 @@ function diffImageToSnapshot(options) {
       diffRatio = diffPixelCount / totalPixels;
       // Always fail test on image size mismatch
       if (hasSizeMismatch) {
-        pass = false;
+        pass = Boolean(allowSizeMismatch);
         diffSize = true;
-      } else if (failureThresholdType === 'pixel') {
+      } else if (failureThresholdType === "pixel") {
         pass = diffPixelCount <= failureThreshold;
-      } else if (failureThresholdType === 'percent') {
+      } else if (failureThresholdType === "percent") {
         pass = diffRatio <= failureThreshold;
       } else {
-        throw new Error(`Unknown failureThresholdType: ${failureThresholdType}. Valid options are "pixel" or "percent".`);
+        throw new Error(
+          `Unknown failureThresholdType: ${failureThresholdType}. Valid options are "pixel" or "percent".`
+        );
       }
     }
 
     if (isFailure({ pass, updateSnapshot })) {
       mkdirp.sync(diffDir);
       const composer = new ImageComposer({
-        direction: diffDirection,
+        direction: diffDirection
       });
 
       composer.addImage(baselineImage, imageWidth, imageHeight);
@@ -191,14 +201,20 @@ function diffImageToSnapshot(options) {
 
       const compositeResultImage = new PNG({
         width: composerParams.compositeWidth,
-        height: composerParams.compositeHeight,
+        height: composerParams.compositeHeight
       });
 
       // copy baseline, diff, and received images into composite result image
       composerParams.images.forEach((image, index) => {
         PNG.bitblt(
-          image.imageData, compositeResultImage, 0, 0, image.imageWidth, image.imageHeight,
-          composerParams.offsetX * index, composerParams.offsetY * index
+          image.imageData,
+          compositeResultImage,
+          0,
+          0,
+          image.imageWidth,
+          image.imageHeight,
+          composerParams.offsetX * index,
+          composerParams.offsetY * index
         );
       });
       // Set filter type to Paeth to avoid expensive auto scanline filter detection
@@ -213,7 +229,7 @@ function diffImageToSnapshot(options) {
         diffOutputPath,
         diffRatio,
         diffPixelCount,
-        imgSrcString: `data:image/png;base64,${pngBuffer}`,
+        imgSrcString: `data:image/png;base64,${pngBuffer}`
       };
     } else if (shouldUpdate({ pass, updateSnapshot, updatePassedSnapshot })) {
       mkdirp.sync(snapshotsDir);
@@ -224,7 +240,7 @@ function diffImageToSnapshot(options) {
         pass,
         diffRatio,
         diffPixelCount,
-        diffOutputPath,
+        diffOutputPath
       };
     }
   }
@@ -232,18 +248,19 @@ function diffImageToSnapshot(options) {
 }
 
 function runDiffImageToSnapshot(options) {
-  options.receivedImageBuffer = options.receivedImageBuffer.toString('base64');
+  options.receivedImageBuffer = options.receivedImageBuffer.toString("base64");
 
   const serializedInput = JSON.stringify(options);
 
   let result = {};
 
   const writeDiffProcess = childProcess.spawnSync(
-    process.execPath, [`${__dirname}/diff-process.js`],
+    process.execPath,
+    [`${__dirname}/diff-process.js`],
     {
       input: Buffer.from(serializedInput),
-      stdio: ['pipe', 'inherit', 'inherit', 'pipe'],
-      maxBuffer: 10 * 1024 * 1024, // 10 MB
+      stdio: ["pipe", "inherit", "inherit", "pipe"],
+      maxBuffer: 10 * 1024 * 1024 // 10 MB
     }
   );
 
@@ -251,7 +268,7 @@ function runDiffImageToSnapshot(options) {
     const output = writeDiffProcess.output[3].toString();
     result = JSON.parse(output);
   } else {
-    throw new Error('Error running image diff.');
+    throw new Error("Error running image diff.");
   }
 
   return result;
@@ -259,5 +276,5 @@ function runDiffImageToSnapshot(options) {
 
 module.exports = {
   diffImageToSnapshot,
-  runDiffImageToSnapshot,
+  runDiffImageToSnapshot
 };
